@@ -50,7 +50,7 @@ class OtimizacaoTesteSistemico(ElementwiseProblem):
         out["G"] = [g1, g2, g3]
 
 # 1. Configurando o Algoritmo Genético
-ref_dirs = get_reference_directions("energy", 4, n_points=91)
+ref_dirs = get_reference_directions("das-dennis", 4, n_partitions=5)
 algorithm = NSGA3(pop_size=100, ref_dirs=ref_dirs)
 
 # 2. Resolvendo o problema
