@@ -1,0 +1,60 @@
+# MTL file - created by a modified js OBJExporter
+
+newmtl 02_-_Default
+Tr 0.0000
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pr 0.8929713596497552
+Pds 1
+Pl 1
+Ka 1 1 1
+Kd 1 1 1
+Ke 0 0 0
+map_Kd 02_-_Default.png
+
+newmtl 03_-_Default
+Tr 0.0000
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pr 0.8929713596497552
+Pds 1
+Pl 1
+Ka 1 1 1
+Kd 1 1 1
+Ke 0 0 0
+map_Kd 03_-_Default.png
+
+newmtl 01_-_Default
+Tr 0.0000
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pr 0.8929713596497552
+Pds 1
+Pl 1
+Ka 1 1 1
+Kd 1 1 1
+Ke 0 0 0
+map_Kd 01_-_Default.png
+norm normalMap3.png
+
+newmtl Plane001__0
+Tr 0.0000
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pr 0.6
+Pds 1
+Pl 1
+Ka 1 1 1
+Kd 0.9232751206037872 0.3779778857636117 0.06226035654863192
+Ke 0 0 0
+
+newmtl Solid_Glass
+Tr 0.0000
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pr 0.8929713596497552
+Pds 1
+Pl 1
+Ka 1 1 1
+Kd 0.9822413541167694 0.47995352489778625 0.08815882486829785
+Ke 0.6147272534626161 0.24491361102137163 0.02570867219132377
