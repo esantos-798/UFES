@@ -152,5 +152,5 @@ while(True):
 
 cap.release()
 cv2.destroyAllWindows()
-cap = cv2.VideoCapture(0, cv2.CAP_MSMF)
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+#cap = cv2.VideoCapture(0, cv2.CAP_MSMF)
+#cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
