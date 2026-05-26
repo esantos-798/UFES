@@ -1,0 +1,157 @@
+import numpy as np
+import pandas as pd
+from pymoo.algorithms.moo.nsga3 import NSGA3
+from pymoo.algorithms.moo.moead import MOEAD
+from pymoo.optimize import minimize
+from pymoo.problems import get_problem
+from pymoo.util.ref_dirs import get_reference_directions
+from pymoo.indicators.igd import IGD
+
+# =============================================================================
+# OPERADORES E MOTOR MOHAF ULTRA (MANTENDO A LÓGICA DO SEU ARQUIVO)
+# =============================================================================
+def domina(a_costs, b_costs):
+    return np.all(a_costs <= b_costs) and np.any(a_costs < b_costs)
+
+def calcular_crowding_distance(archive_costs):
+    n = len(archive_costs)
+    if n <= 2: return np.inf * np.ones(n)
+    num_objs = archive_costs.shape[1]
+    distances = np.zeros(n)
+    for m in range(num_objs):
+        idx = np.argsort(archive_costs[:, m])
+        distances[idx[0]] = np.inf
+        distances[idx[-1]] = np.inf
+        obj_min, obj_max = archive_costs[idx[0], m], archive_costs[idx[-1], m]
+        norm = obj_max - obj_min if obj_max != obj_min else 1.0
+        for i in range(1, n - 1):
+            distances[idx[i]] += (archive_costs[idx[i+1], m] - archive_costs[idx[i-1], m]) / norm
+    return distances
+
+def selecionar_lider_roleta(archive_pos, archive_costs):
+    dist = calcular_crowding_distance(archive_costs)
+    if np.all(np.isinf(dist)):
+        probs = np.ones(len(archive_pos)) / len(archive_pos)
+    else:
+        valores_reais = dist[~np.isinf(dist)]
+        max_real = np.max(valores_reais) if len(valores_reais) > 0 else 1.0
+        dist[np.isinf(dist)] = max_real * 2.0
+        dist = np.maximum(dist, 1e-6)
+        soma_dist = np.sum(dist)
+        probs = dist / soma_dist if (soma_dist > 0 and not np.isnan(soma_dist)) else np.ones(len(archive_pos)) / len(archive_pos)
+    if np.any(np.isnan(probs)) or np.any(np.isinf(probs)):
+        probs = np.ones(len(archive_pos)) / len(archive_pos)
+    return archive_pos[np.random.choice(len(archive_pos), p=probs)]
+
+def run_mohaf_ultra(problem_name, max_iter=500, num_pop=100, max_archive=100, p_turbulento=0.15):
+    prob = get_problem(problem_name)
+    D = prob.n_var
+    lb, ub = prob.xl, prob.xu
+    
+    X = np.random.uniform(lb, ub, size=(num_pop, D))
+    X_costs = np.array([prob.evaluate(ind) for ind in X])
+    archive_pos, archive_costs = [], []
+    
+    for t in range(max_iter):
+        for i in range(num_pop):
+            sol_dominada = False
+            eliminar_do_archive = []
+            for j in range(len(archive_pos)):
+                if domina(archive_costs[j], X_costs[i]):
+                    sol_dominada = True; break
+                elif domina(X_costs[i], archive_costs[j]):
+                    eliminar_do_archive.append(j)
+            if not sol_dominada:
+                for idx in sorted(eliminar_do_archive, reverse=True):
+                    archive_pos.pop(idx); archive_costs.pop(idx)
+                archive_pos.append(np.copy(X[i])); archive_costs.append(np.copy(X_costs[i]))
+        
+        if len(archive_pos) > max_archive:
+            dist = calcular_crowding_distance(np.array(archive_costs))
+            idx_remover = np.argsort(dist)[:(len(archive_pos) - max_archive)]
+            for idx in sorted(idx_remover, reverse=True):
+                archive_pos.pop(idx); archive_costs.pop(idx)
+        
+        a = 2.0 * np.log(1.0 + (max_iter - t) / max_iter) / np.log(2.0)
+        
+        for i in range(num_pop):
+            if np.random.rand() < p_turbulento:
+                # Escoamento Turbulento (Cauchy)
+                escala_vortice = 0.02 * (ub - lb) * (1.0 - (t / max_iter))
+                X[i] = X[i] + np.random.standard_cauchy(D) * escala_vortice
+            else:
+                # Escoamento Laminar (HAF Ultra)
+                if len(archive_pos) > 0:
+                    best_pos = selecionar_lider_roleta(archive_pos, np.array(archive_costs))
+                else:
+                    best_pos = X[np.random.randint(0, num_pop)]
+                    
+                r1, r2 = np.random.rand(D), np.random.rand(D)
+                A, C = 2.0 * a * r1 - a, 2.0 * r2 * np.cos(np.pi * (t / max_iter))
+                X_vizinho = X[np.random.randint(0, num_pop)]
+                
+                if np.abs(A[0]) > 1.0:
+                    X[i] = X_vizinho - A * np.abs(C * X_vizinho - X[i])
+                else:
+                    X[i] = best_pos - A * np.abs(C * best_pos - X[i])
+            
+            X[i] = np.clip(X[i], lb, ub)
+            X_costs[i] = prob.evaluate(X[i])
+            
+    return np.array(archive_costs)
+
+# =============================================================================
+# EXECUÇÃO DO CONFRONTO AMPLIADO (10 BENCHMARKS x 10 RUNS)
+# =============================================================================
+benchmarks = ["zdt1", "zdt2", "zdt3", "zdt4", "zdt6", "dtlz1", "dtlz2", "dtlz3", "dtlz4", "dtlz5"]
+num_runs = 10
+resultados = {b: {"MOHAF": [], "NSGA-III": [], "MOEA/D": []} for b in benchmarks}
+
+print("Iniciando o Torneio de Alto Orçamento (Pop=100, Gen=500)...")
+
+for b in benchmarks:
+    print(f"\nAvaliando o Benchmark: {b.upper()}")
+    prob = get_problem(b)
+    pf_teorico = prob.pareto_front()
+    metric_igd = IGD(pf_teorico)
+    
+    n_obj = prob.n_obj
+    # Ajustando partições para aproximar o tamanho da população para 100
+    ref_dirs = get_reference_directions("das-dennis", n_obj, n_partitions=99 if n_obj==2 else 12)
+    
+    for run in range(num_runs):
+        print(f" -> Execução {run+1}/{num_runs}...", end="\r")
+        
+        # 1. Executa MOHAF Ultra (Passando os novos limites de população e iteração)
+        mohaf_pf = run_mohaf_ultra(b, max_iter=500, num_pop=100, max_archive=100)
+        resultados[b]["MOHAF"].append(metric_igd.do(mohaf_pf))
+        
+        # 2. Executa NSGA-III
+        res_nsga3 = minimize(prob, NSGA3(ref_dirs=ref_dirs), ('n_gen', 500), verbose=False)
+        resultados[b]["NSGA-III"].append(metric_igd.do(res_nsga3.F))
+        
+        # 3. Executa MOEA/D
+        res_moead = minimize(prob, MOEAD(ref_dirs=ref_dirs, n_neighbors=15), ('n_gen', 500), verbose=False)
+        resultados[b]["MOEA/D"].append(metric_igd.do(res_moead.F))
+
+# =============================================================================
+# COMPILAÇÃO FINAL DA TABELA ACADÊMICA
+# =============================================================================
+linhas_tabela = []
+for b in benchmarks:
+    linha = {
+        "Benchmark": b.upper(),
+        "MOHAF (Média IGD)": np.mean(resultados[b]["MOHAF"]),
+        "MOHAF (Desvio Padrão)": np.std(resultados[b]["MOHAF"]),
+        "NSGA-III (Média IGD)": np.mean(resultados[b]["NSGA-III"]),
+        "NSGA-III (Desvio Padrão)": np.std(resultados[b]["NSGA-III"]),
+        "MOEA/D (Média IGD)": np.mean(resultados[b]["MOEA/D"]),
+        "MOEA/D (Desvio Padrão)": np.std(resultados[b]["MOEA/D"])
+    }
+    linhas_tabela.append(linha)
+
+df_consolidado = pd.DataFrame(linhas_tabela)
+print("\n\n=== TABELA CONSOLIDADA DE RESULTADOS (POP=100, ITER=500) ===")
+print(df_consolidado.to_string(index=False))
+
+df_consolidado.to_csv("resultado_mohaf_alto_orcamento.csv", index=False)
