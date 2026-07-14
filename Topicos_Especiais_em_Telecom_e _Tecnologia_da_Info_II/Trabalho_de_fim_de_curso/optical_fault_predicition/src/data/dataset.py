@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 
 class OpticalDataset(Dataset):
 
+
     def __init__(
         self,
         X,
@@ -12,41 +13,94 @@ class OpticalDataset(Dataset):
         task="classification"
     ):
 
-        self.X = torch.FloatTensor(X)
 
-        self.y = torch.FloatTensor(y)
+        # ============================
+        # Dados de entrada
+        # ============================
 
-        self.failure = (
-            None
-            if failure is None
-            else torch.FloatTensor(failure)
+        self.X = torch.FloatTensor(
+            X
         )
+
 
         self.task = task
 
-    def __len__(self):
 
-        return len(self.X)
 
-    def __getitem__(self, idx):
+        # ============================
+        # Label de falha
+        # ============================
 
-        if self.task == "classification":
+        if failure is not None:
 
-            return (
-                self.X[idx],
-                self.y[idx],
-                self.failure[idx]
+
+            self.failure = torch.FloatTensor(
+                failure
             )
 
-        elif self.task == "forecast":
-
-            return (
-                self.X[idx],
-                self.y[idx]
-            )
 
         else:
 
-            raise ValueError(
-                f"Unknown task: {self.task}"
+            self.failure = torch.zeros(
+                len(X)
             )
+
+
+
+        # ============================
+        # Target
+        # ============================
+
+        if task == "classification":
+
+
+            # classificação:
+            # prever se haverá falha
+
+            self.y = self.failure.unsqueeze(1)
+
+
+
+        else:
+
+
+            # forecast:
+            # prever valores futuros
+
+            self.y = torch.FloatTensor(
+                y
+            )
+
+
+
+    # ============================
+    # tamanho dataset
+    # ============================
+
+    def __len__(self):
+
+        return len(
+            self.X
+        )
+
+
+
+    # ============================
+    # item
+    # ============================
+
+    def __getitem__(
+        self,
+        idx
+    ):
+
+
+        return (
+
+            self.X[idx],
+
+            self.y[idx],
+
+            self.failure[idx]
+
+        )

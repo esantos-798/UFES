@@ -1,54 +1,16 @@
-from src.experiments.experiment import Experiment
+from configs.models import *
 from src.models.model_factory import ModelFactory
+from experiments.experiment import Experiment
 
 
-
-models = [
-
-    "lstm",
-
-    "gru",
-
-    "bilstm",
-
-    "cnn_lstm",
-
-    "lstnet",
-
-    "attention_lstnet",
-
-    "transformer",
-
-    "tcn"
-
-]
+exp = Experiment(
+    model="lstm",
+    task="classification",
+    dataset="hard_failure"
+)
 
 
-for name in models:
+model = ModelFactory.create(exp)
 
 
-    print(
-        "\nTesting:",
-        name
-    )
-
-
-    exp = Experiment(
-
-        model=name
-
-    )
-
-
-    model = ModelFactory.create(
-
-        exp
-
-    )
-
-
-    print(
-
-        type(model).__name__
-
-    )
+print(model)

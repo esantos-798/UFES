@@ -1,0 +1,22 @@
+{
+    "model": "lstm",
+    "task": "forecast",
+    "dataset": "soft_failure",
+    "input_size": 12,
+    "output_size": 12,
+    "sequence_length": 30,
+    "batch_size": 64,
+    "epochs": 30,
+    "lr": 0.001,
+    "patience": 5,
+    "hidden_size": 100,
+    "dropout": 0.2,
+    "cnn_channels": 32,
+    "kernel_size": 3,
+    "skip": 5,
+    "d_model": 64,
+    "nhead": 4,
+    "num_layers": 1,
+    "hidden_channels": 64,
+    "experiment_root": "experiments"
+}

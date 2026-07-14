@@ -1,85 +1,87 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 
+from src.data.dataloader import get_dataloader
 from src.models.model_factory import ModelFactory
 
-from src.data.dataloader import get_dataloader
+from src.training.trainer import Trainer
+from src.training.evaluator import Evaluator
 
-from src.training.forecast_trainer import ForecastTrainer
-from src.training.forecast_evaluator import ForecastEvaluator
+from src.evaluation.anomaly_detector import AnomalyDetector
+
+from src.utils.experiment_logger import ExperimentLogger
 
 
 class ExperimentRunner:
-
 
     def __init__(self, experiment):
 
         self.experiment = experiment
 
         self.device = torch.device(
-            "cuda" if torch.cuda.is_available()
+
+            "cuda"
+
+            if torch.cuda.is_available()
+
             else "cpu"
+
         )
+
+        self.logger = ExperimentLogger(experiment)
 
 
     def run(self):
 
-        print("\n==============================")
-        print(
-            f"Running model: {self.experiment.model}"
-        )
-        print("==============================\n")
+        print()
+        print("=" * 60)
+        print(self.experiment.name)
+        print("=" * 60)
+        print()
 
-
-        # =========================
-        # Data
-        # =========================
+        # ======================================================
+        # DATA
+        # ======================================================
 
         train_loader, val_loader, test_loader = get_dataloader(
+
+            batch_size=self.experiment.batch_size,
+
             task=self.experiment.task
+
         )
 
-
-        # =========================
-        # Model
-        # =========================
+        # ======================================================
+        # MODEL
+        # ======================================================
 
         model = ModelFactory.create(
+
             self.experiment
-        )
 
-
-        model = model.to(
-            self.device
-        )
-
+        ).to(self.device)
 
         print(model)
 
-
-        # =========================
-        # Loss
-        # =========================
-
-        criterion = nn.HuberLoss()
-
-
-        # =========================
-        # Optimizer
-        # =========================
+        # ======================================================
+        # OPTIMIZER
+        # ======================================================
 
         optimizer = optim.Adam(
+
             model.parameters(),
-            lr=self.experiment.learning_rate
+
+            lr=self.experiment.lr
+
         )
 
+        # ======================================================
+        # TRAIN
+        # ======================================================
 
-        # =========================
-        # Trainer
-        # =========================
+        trainer = Trainer(
 
-        trainer = ForecastTrainer(
+            experiment=self.experiment,
 
             model=model,
 
@@ -89,91 +91,107 @@ class ExperimentRunner:
 
             optimizer=optimizer,
 
-            criterion=criterion,
-
-            device=self.device,
-
-            patience=5,
-
-            checkpoint_path=
-            f"best_{self.experiment.model}.pt"
-
-        )
-
-
-        # =========================
-        # Training
-        # =========================
-
-        for epoch in range(
-            self.experiment.epochs
-        ):
-
-            train_loss = trainer.train_epoch()
-
-            val_loss = trainer.validate()
-
-
-            print(
-                f"Epoch {epoch+1:02d}/"
-                f"{self.experiment.epochs} "
-                f"| Train {train_loss:.6f} "
-                f"| Val {val_loss:.6f}"
-            )
-
-
-            stop = trainer.early_stopping(
-                val_loss
-            )
-
-
-            if stop:
-
-                print(
-                    "Early stopping"
-                )
-
-                break
-
-
-
-        # =========================
-        # Load best model
-        # =========================
-
-        model.load_state_dict(
-            torch.load(
-                f"best_{self.experiment.model}.pt",
-                weights_only=True
-            )
-        )
-
-
-        # =========================
-        # Evaluation
-        # =========================
-
-        evaluator = ForecastEvaluator(
-
-            model=model,
-
-            test_loader=test_loader,
+            criterion=self.experiment.criterion,
 
             device=self.device
 
         )
 
+        model = trainer.fit()
 
-        results = evaluator.evaluate()
+        history = trainer.history
 
+        # ======================================================
+        # TEST
+        # ======================================================
 
-        print("\n===== RESULTS =====")
+        if self.experiment.task == "classification":
 
-        for key,value in results.items():
+            evaluator = Evaluator(
 
-            print(
-                f"{key}: {value:.6f}"
+                model=model,
+
+                test_loader=test_loader,
+
+                device=self.device,
+
+                task="classification"
+
             )
 
+            results = evaluator.evaluate()
+
+            predictions = evaluator.predictions
+
+            labels = evaluator.labels
+
+            errors = None
+
+            threshold = None
+
+        elif self.experiment.task == "forecast":
+
+            detector = AnomalyDetector(
+
+                model=model,
+
+                test_loader=test_loader,
+
+                device=self.device
+
+            )
+
+            results = detector.evaluate()
+
+            predictions = detector.predictions
+
+            labels = detector.labels
+
+            errors = detector.errors
+
+            threshold = detector.threshold
+
+        else:
+
+            raise ValueError("Unknown task")
+
+        # ======================================================
+        # PRINT
+        # ======================================================
+
+        print()
+        print("=" * 60)
+        print("RESULTS")
+        print("=" * 60)
+
+        for k, v in results.items():
+
+            print(f"{k}: {v}")
+
+        # ======================================================
+        # SAVE EVERYTHING
+        # ======================================================
+
+        self.logger.save_all(
+
+            model=model,
+
+            metrics=results,
+
+            history=history,
+
+            predictions=predictions,
+
+            labels=labels,
+
+            errors=errors,
+
+            threshold=threshold
+
+        )
+
+        print()
+
+        print("Experiment saved successfully.")
 
         return results

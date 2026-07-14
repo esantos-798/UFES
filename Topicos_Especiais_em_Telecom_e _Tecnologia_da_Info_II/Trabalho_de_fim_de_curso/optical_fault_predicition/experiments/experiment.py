@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 import json
 import torch.nn as nn
@@ -12,8 +12,9 @@ class Experiment:
     # ===========================
 
     model: str
-    task: str                  # forecast | classification
-    dataset: str               # hard_failure | soft_failure
+    task: str
+    dataset: str
+
 
     # ===========================
     # Dados
@@ -23,6 +24,7 @@ class Experiment:
     output_size: int = 12
     sequence_length: int = 30
 
+
     # ===========================
     # Treinamento
     # ===========================
@@ -31,6 +33,7 @@ class Experiment:
     epochs: int = 30
     lr: float = 0.001
     patience: int = 5
+
 
     # ===========================
     # Modelo
@@ -42,17 +45,22 @@ class Experiment:
     cnn_channels: int = 32
     kernel_size: int = 3
 
+    skip: int = 5
+
     d_model: int = 64
     nhead: int = 4
-    num_layers: int = 2
+    num_layers: int = 1
 
     hidden_channels: int = 64
+    
+
 
     # ===========================
     # Diretórios
     # ===========================
 
     experiment_root: str = "experiments"
+
 
     # ===========================
     # Nome
@@ -61,16 +69,21 @@ class Experiment:
     @property
     def name(self):
 
-        return f"{self.model}_{self.task}_{self.dataset}"
+        return (
+            f"{self.model}_"
+            f"{self.task}_"
+            f"{self.dataset}"
+        )
 
-    # ===========================
-    # Pasta
-    # ===========================
 
     @property
     def output_dir(self):
 
-        path = Path(self.experiment_root) / self.name
+        path = (
+            Path(self.experiment_root)
+            /
+            self.name
+        )
 
         path.mkdir(
             parents=True,
@@ -79,50 +92,62 @@ class Experiment:
 
         return path
 
-    # ===========================
-    # Checkpoint
-    # ===========================
+
 
     @property
     def checkpoint(self):
 
-        return self.output_dir / "best_model.pt"
+        return (
+            self.output_dir
+            /
+            "best_model.pt"
+        )
 
-    # ===========================
-    # Histórico
-    # ===========================
+
 
     @property
     def history_file(self):
 
-        return self.output_dir / "history.csv"
+        return (
+            self.output_dir
+            /
+            "history.csv"
+        )
 
-    # ===========================
-    # Métricas
-    # ===========================
+
 
     @property
     def metrics_file(self):
 
-        return self.output_dir / "metrics.json"
+        return (
+            self.output_dir
+            /
+            "metrics.json"
+        )
 
-    # ===========================
-    # Predições
-    # ===========================
+
 
     @property
     def predictions_file(self):
 
-        return self.output_dir / "predictions.csv"
+        return (
+            self.output_dir
+            /
+            "predictions.csv"
+        )
 
-    # ===========================
-    # Configuração
-    # ===========================
+
 
     @property
     def config_file(self):
 
-        return self.output_dir / "config.json"
+        return (
+            self.output_dir
+            /
+            "config.json"
+        )
+
+
 
     # ===========================
     # Loss
@@ -135,10 +160,20 @@ class Experiment:
 
             return nn.HuberLoss()
 
-        return nn.BCEWithLogitsLoss()
+        elif self.task == "classification":
+
+            return nn.BCEWithLogitsLoss()
+
+        else:
+
+            raise ValueError(
+                f"Unknown task {self.task}"
+            )
+
+
 
     # ===========================
-    # Hiperparâmetros
+    # Modelo
     # ===========================
 
     @property
@@ -146,10 +181,22 @@ class Experiment:
 
         params = {
 
-            "input_size": self.input_size,
-            "output_size": self.output_size
+            "input_size":
+                self.input_size,
+
+            "output_size":
+                self.output_size
 
         }
+
+
+        # Classificação sempre gera 1 saída
+
+        if self.task == "classification":
+
+            params["output_size"] = 1
+
+
 
         if self.model in [
 
@@ -159,7 +206,13 @@ class Experiment:
 
         ]:
 
-            params["hidden_size"] = self.hidden_size
+            params.update({
+
+                "hidden_size":
+                    self.hidden_size
+
+            })
+
 
         elif self.model in [
 
@@ -171,36 +224,50 @@ class Experiment:
 
             params.update({
 
-                "hidden_size": self.hidden_size,
-                "cnn_channels": self.cnn_channels,
-                "kernel_size": self.kernel_size
+                "hidden_size":
+                    self.hidden_size,
+
+                "cnn_channels":
+                    self.cnn_channels,
+
+                "kernel_size":
+                    self.kernel_size
 
             })
+
 
         elif self.model == "transformer":
 
             params.update({
 
-                "d_model": self.d_model,
-                "nhead": self.nhead,
-                "num_layers": self.num_layers,
-                "dropout": self.dropout
+                "d_model":
+                    self.d_model,
+
+                "nhead":
+                    self.nhead,
+
+                "num_layers":
+                    self.num_layers,
+
+                "dropout":
+                    self.dropout
 
             })
+
 
         elif self.model == "tcn":
 
             params.update({
 
-                "hidden_channels": self.hidden_channels
+                "hidden_channels":
+                    self.hidden_channels
 
             })
 
+
         return params
 
-    # ===========================
-    # Optimizer
-    # ===========================
+
 
     @property
     def optimizer_params(self):
@@ -211,13 +278,45 @@ class Experiment:
 
         }
 
+
+
     # ===========================
-    # Salvar Config
+    # Salvar configuração
     # ===========================
 
     def save(self):
 
-        config = self.__dict__.copy()
+        config = {
+
+            "model": self.model,
+
+            "task": self.task,
+
+            "dataset": self.dataset,
+
+            "input_size":
+                self.input_size,
+
+            "output_size":
+                self.output_size,
+
+            "sequence_length":
+                self.sequence_length,
+
+            "batch_size":
+                self.batch_size,
+
+            "epochs":
+                self.epochs,
+
+            "lr":
+                self.lr,
+
+            "hidden_size":
+                self.hidden_size
+
+        }
+
 
         with open(
 

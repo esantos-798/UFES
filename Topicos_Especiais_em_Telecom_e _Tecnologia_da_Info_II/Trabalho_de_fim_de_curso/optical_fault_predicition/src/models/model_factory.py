@@ -30,9 +30,17 @@ class ModelFactory:
 
         if name == "lstm":
 
-            from src.models.lstm import LSTM
+            if exp.task == "classification":
 
-            model_class = LSTM
+                from src.models.lstm_classifier import LSTMClassifier
+
+                model_class = LSTMClassifier
+
+            else:
+
+                from src.models.lstm import LSTM
+
+                model_class = LSTM
 
 
         elif name == "gru":
@@ -83,6 +91,23 @@ class ModelFactory:
 
             model_class = TCN
 
+        elif name == "lstnet_v2":
+
+            from src.models.lstnet_v2 import LSTNetV2
+
+            model_class = LSTNetV2
+
+        elif name == "multitask_lstnet":
+
+            from src.models.multitask_lstnet import MultiTaskLSTNet
+
+            model_class = MultiTaskLSTNet   
+
+        elif name == "mtl_lstnet":
+
+            from src.models.mtl_lstnet import MTLLSTNet
+
+            model_class = MTLLSTNet     
 
         else:
 
@@ -105,10 +130,12 @@ class ModelFactory:
 
             "d_model": exp.d_model,
 
-            "nhead": exp.nhead
+            "nhead": exp.nhead,
 
+            "cnn_channels": exp.cnn_channels,
+
+            "kernel_size": exp.kernel_size
         }
-
 
         # remove argumentos não suportados
 

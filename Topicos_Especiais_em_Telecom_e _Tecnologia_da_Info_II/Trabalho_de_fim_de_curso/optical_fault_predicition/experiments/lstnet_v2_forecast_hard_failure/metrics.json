@@ -1,0 +1,19 @@
+{
+    "Threshold": 1.4479268789291382,
+    "Accuracy": 0.9154351395730707,
+    "Precision": 0.10606060606060606,
+    "Recall": 0.13725490196078433,
+    "F1": 0.11965811965811966,
+    "AUC": 0.8287548095502125,
+    "False Alarm Rate": 0.050556983718937444,
+    "Miss Detection Rate": 0.8627450980392157,
+    "TN": 1108,
+    "FP": 59,
+    "FN": 44,
+    "TP": 7,
+    "Average Lead Time": 16.133333333333333,
+    "Maximum Lead Time": 48,
+    "Minimum Lead Time": 1,
+    "Detected Failures": 66,
+    "Real Failures": 51
+}

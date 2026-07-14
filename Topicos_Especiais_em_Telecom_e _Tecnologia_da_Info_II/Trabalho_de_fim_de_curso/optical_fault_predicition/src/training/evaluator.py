@@ -20,17 +20,11 @@ from scipy.stats import pearsonr
 class Evaluator:
 
     def __init__(
-
         self,
-
         model,
-
         test_loader,
-
         device,
-
         task="classification"
-
     ):
 
         self.model = model
@@ -41,25 +35,38 @@ class Evaluator:
 
         self.task = task
 
+
+    # ======================================================
+    # Dispatcher
+    # ======================================================
+
     def evaluate(self):
 
         if self.task == "classification":
 
             return self.evaluate_classification()
 
+
         elif self.task == "forecast":
 
             return self.evaluate_forecast()
+
 
         else:
 
             raise ValueError(
                 f"Unknown task: {self.task}"
             )
-        
+
+
+    # ======================================================
+    # Classification Metrics
+    # ======================================================
+
     def evaluate_classification(self):
 
         self.model.eval()
+
 
         predictions = []
 
@@ -67,142 +74,241 @@ class Evaluator:
 
         targets = []
 
+
         with torch.no_grad():
 
-            for X, y in self.test_loader:
+            for batch in self.test_loader:
+
+                if len(batch) == 3:
+
+                    X, y, failure = batch
+
+                else:
+
+                    X, y = batch
+
+                    failure = y
+
 
                 X = X.to(self.device)
 
+                failure = failure.to(self.device)
+
+
                 output = self.model(X)
 
-                prob = torch.sigmoid(output)
 
-                pred = (prob > 0.5).float()
+                prob = torch.sigmoid(
+                    output
+                )
+
+
+                pred = (
+                    prob > 0.5
+                ).float()
+
 
                 predictions.extend(
-                    pred.cpu().numpy().flatten()
+                    pred.cpu()
+                    .numpy()
+                    .flatten()
                 )
+
 
                 probabilities.extend(
-                    prob.cpu().numpy().flatten()
+                    prob.cpu()
+                    .numpy()
+                    .flatten()
                 )
+
 
                 targets.extend(
-                    y.numpy().flatten()
+                    failure.cpu()
+                    .numpy()
+                    .flatten()
                 )
 
-        predictions = np.array(predictions)
 
-        probabilities = np.array(probabilities)
+        predictions = np.array(
+            predictions
+        )
 
-        targets = np.array(targets)
+        probabilities = np.array(
+            probabilities
+        )
+
+        targets = np.array(
+            targets
+        )
+
+
+        cm = confusion_matrix(
+            targets,
+            predictions
+        )
+
+
+        tn, fp, fn, tp = cm.ravel()
+
 
         return {
 
-            "Accuracy": accuracy_score(
-                targets,
-                predictions
+            "Accuracy": float(
+                accuracy_score(
+                    targets,
+                    predictions
+                )
             ),
 
-            "Precision": precision_score(
-                targets,
-                predictions,
-                zero_division=0
+
+            "Precision": float(
+                precision_score(
+                    targets,
+                    predictions,
+                    zero_division=0
+                )
             ),
 
-            "Recall": recall_score(
-                targets,
-                predictions
+
+            "Recall": float(
+                recall_score(
+                    targets,
+                    predictions,
+                    zero_division=0
+                )
             ),
 
-            "F1": f1_score(
-                targets,
-                predictions
+
+            "F1": float(
+                f1_score(
+                    targets,
+                    predictions,
+                    zero_division=0
+                )
             ),
 
-            "AUC": roc_auc_score(
-                targets,
-                probabilities
+
+            "AUC": float(
+                roc_auc_score(
+                    targets,
+                    probabilities
+                )
             ),
 
-            "Confusion Matrix": confusion_matrix(
-                targets,
-                predictions
-            )
+
+            "TN": int(tn),
+
+            "FP": int(fp),
+
+            "FN": int(fn),
+
+            "TP": int(tp)
 
         }
-    
+
+
+
+    # ======================================================
+    # Forecast Metrics
+    # ======================================================
+
     def evaluate_forecast(self):
 
         self.model.eval()
+
 
         predictions = []
 
         targets = []
 
+
         with torch.no_grad():
+
 
             for X, y in self.test_loader:
 
+
                 X = X.to(self.device)
+
 
                 output = self.model(X)
 
+
                 predictions.append(
-
-                    output.cpu().numpy()
-
+                    output.cpu()
+                    .numpy()
                 )
+
 
                 targets.append(
-
                     y.numpy()
-
                 )
+
+
 
         predictions = np.vstack(
             predictions
         )
 
+
         targets = np.vstack(
             targets
         )
+
 
         mse = mean_squared_error(
             targets,
             predictions
         )
 
-        rmse = np.sqrt(mse)
+
+        rmse = np.sqrt(
+            mse
+        )
+
 
         mae = mean_absolute_error(
             targets,
             predictions
         )
 
+
         r2 = r2_score(
             targets,
             predictions
         )
 
+
         pearson = pearsonr(
-
             targets.flatten(),
-
             predictions.flatten()
-
         )[0]
+
 
         return {
 
-            "MSE": mse,
+            "MSE": float(
+                mse
+            ),
 
-            "RMSE": rmse,
 
-            "MAE": mae,
+            "RMSE": float(
+                rmse
+            ),
 
-            "R2": r2,
 
-            "Pearson": pearson
+            "MAE": float(
+                mae
+            ),
+
+
+            "R2": float(
+                r2
+            ),
+
+
+            "Pearson": float(
+                pearson
+            )
 
         }

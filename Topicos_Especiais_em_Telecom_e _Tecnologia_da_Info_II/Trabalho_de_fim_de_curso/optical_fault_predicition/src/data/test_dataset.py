@@ -1,5 +1,5 @@
-from .preprocessing import OpticalFaultPreprocessor
-from .dataset import OpticalFaultDataset
+from src.data.dataset import OpticalDataset
+from src.data.preprocessing import OpticalFaultPreprocessor
 from config import HARD_FAILURE_DATASET
 
 
@@ -11,23 +11,17 @@ processor = OpticalFaultPreprocessor(
 X, y, failure = processor.run()
 
 
-dataset = OpticalFaultDataset(
+dataset = OpticalDataset(
     X,
     y,
-    failure
+    failure,
+    task="classification"
 )
 
-print(dataset)
 
-print("Número de amostras:")
-print(len(dataset))
+sample = dataset[0]
 
 
-sample_X, sample_y = dataset[0]
-
-
-print("\nEntrada:")
-print(sample_X.shape)
-
-print("\nSaída:")
-print(sample_y.shape)
+print("X:", sample[0].shape)
+print("target:", sample[1].shape)
+print("target:", sample[1])

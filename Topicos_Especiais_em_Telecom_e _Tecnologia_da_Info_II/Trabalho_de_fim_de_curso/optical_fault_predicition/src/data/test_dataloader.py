@@ -1,52 +1,17 @@
-from .preprocessing import OpticalFaultPreprocessor
-from .dataset import OpticalFaultDataset
-from .dataloader import get_dataloader
-from config import HARD_FAILURE_DATASET
+from src.data.dataloader import get_dataloader
 
-import numpy as np
-
-
-processor = OpticalFaultPreprocessor(
-    HARD_FAILURE_DATASET
+train_loader, val_loader, test_loader = get_dataloader(
+    batch_size=64,
+    task="classification"
 )
 
+print(f"Train samples: {len(train_loader.dataset)}")
+print(f"Validation samples: {len(val_loader.dataset)}")
+print(f"Test samples: {len(test_loader.dataset)}")
 
-X, y, failure = processor.run()
+X, y, failure = next(iter(train_loader))
 
-
-dataset = OpticalFaultDataset(
-    X,
-    y,
-    failure
-)
-
-
-loader = get_dataloader(
-    dataset,
-    batch_size=64
-)
-
-
-print("Número de batches:")
-print(len(loader))
-
-
-for batch_X, batch_y, batch_failure in loader:
-
-    print("\nBatch X:")
-    print(batch_X.shape)
-
-    print("\nBatch y:")
-    print(batch_y.shape)
-
-    print("\nBatch failure:")
-    print(batch_failure.shape)
-
-    break
-
-print(
-    np.unique(
-        failure,
-        return_counts=True
-    )
-)
+print("\nBatch:")
+print("X:", X.shape)
+print("y:", y.shape)
+print("failure:", failure.shape)
