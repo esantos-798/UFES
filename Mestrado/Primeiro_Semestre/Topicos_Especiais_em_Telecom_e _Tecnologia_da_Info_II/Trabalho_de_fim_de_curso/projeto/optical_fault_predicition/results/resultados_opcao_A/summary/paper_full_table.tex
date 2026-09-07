@@ -1,0 +1,16 @@
+\begin{table}
+\caption{Resumo de Desempenho do Modelo nas Tarefas Multitarefa e Detecção de Falhas}
+\label{tab:full_results}
+\begin{tabular}{llrrrrr}
+\toprule
+dataset & model & F1 & AUC & Forecast_R2 & Forecast_Pearson & Lead_Time_Avg \\
+\midrule
+hard & lstm_xgboost & 0.2299 & 0.8719 & 0.5995 & 0.7744 & 6.3864 \\
+hard & lstnet_xgboost & 0.2007 & 0.8356 & 0.6095 & 0.7816 & 5.8864 \\
+hard & transformer_xgboost & 0.2270 & 0.8487 & 0.6033 & 0.7782 & 6.0000 \\
+soft & lstm_xgboost & 0.4282 & 0.8373 & 0.7603 & 0.8729 & 4.3019 \\
+soft & lstnet_xgboost & 0.3612 & 0.7313 & 0.7625 & 0.8733 & 5.1226 \\
+soft & transformer_xgboost & 0.3695 & 0.7940 & 0.7529 & 0.8705 & 3.5514 \\
+\bottomrule
+\end{tabular}
+\end{table}

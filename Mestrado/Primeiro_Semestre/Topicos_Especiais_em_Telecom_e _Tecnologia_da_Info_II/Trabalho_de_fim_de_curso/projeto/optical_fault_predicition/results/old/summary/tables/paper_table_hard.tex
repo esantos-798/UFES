@@ -1,0 +1,13 @@
+\begin{tabular}{lrlll}
+\toprule
+Architecture & Weight & F1 Score & Forecast RMSE & Lead Time (min) \\
+\midrule
+lstm & 10 & 0.8675 & 0.5391 & 4.1 \\
+bilstm & 2 & 0.8605 & 0.5417 & 6.4 \\
+gru & 7 & 0.8537 & 0.5346 & 4.6 \\
+tcn & 7 & 0.8434 & 0.5445 & 6.0 \\
+transformer & 10 & 0.8605 & 0.5344 & 6.0 \\
+lstnet & 7 & 0.8434 & 0.5356 & 5.9 \\
+multitask_lstnet & 10 & 0.7905 ($\pm$0.0142) & 0.6017 ($\pm$0.0552) & 5.3 ($\pm$1.0) \\
+\bottomrule
+\end{tabular}
