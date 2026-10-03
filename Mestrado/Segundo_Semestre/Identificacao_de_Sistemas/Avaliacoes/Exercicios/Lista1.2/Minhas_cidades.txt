@@ -1,0 +1,8 @@
+#1 - Salvador
+#2 - São Paulo
+#3 - Rio de Janeiro
+#4 - Porto Alegre
+#5 - Teresina
+#6 - Maceió
+#7 - Goiânia
+#8 - Boa Vista
