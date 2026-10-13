@@ -1,0 +1,54 @@
+function [h_mc, t_bins] = simular_mc_uwoc_HG()
+
+    % --- Parâmetros de entrada -------------------------------------------
+    num_fotons = 1e5;           %número de fotons 
+    L = 20;                     %distância linear entre transmissor e receptor (m)
+    a = 0.0508;                  %coeficiente de absorção (tabelado conforme o tipo de água)
+    b = 0.2116;                  %coeficiente de espalhamento (tabelado conforme o tipo de água)
+    v = 2.25e8;                 %velocidade da luz na água
+    g = 0.85;                   %Fator de assimetria de Henyey-Greenstein (0.85 é típico para água)
+    
+    c=a+b;                      %coeficiente de extinção
+                              
+    %a e b são influenciados pelo lambda
+
+
+    t_chegada = [];
+    
+    for i = 1:num_fotons
+        pos = [0, 0, 0];
+        dir = [1, 0, 0]; % Vetor direção original
+        dist_total = 0;
+        
+        while pos(1) < L && dist_total < 5*L
+            % Passo livre
+            dist_passo = -log(rand()) / c;
+            pos = pos + dir * dist_passo;
+            dist_total = dist_total + dist_passo;
+            
+            % Dispersão via Henyey-Greenstein
+            % Sorteia o novo ângulo theta baseado no fator g
+            r = rand();
+            cos_theta = (1/(2*g)) * (1 + g^2 - ((1-g^2)/(1-g+2*g*r))^2);
+            sin_theta = sqrt(1 - cos_theta^2);
+            phi = 2*pi*rand();
+
+            % Atualiza vetor direção (matriz de rotação)
+            % Simplificação: rotaciona o vetor 'dir' pelo novo ângulo
+            nova_dir = [cos_theta, sin_theta*cos(phi), sin_theta*sin(phi)];
+            dir = nova_dir / norm(nova_dir);
+        end
+        
+        if pos(1) >= L % O fóton atingiu o plano do detector
+            t_chegada = [t_chegada, dist_total / v];
+        end
+    end
+    
+    % Gera histograma que é o seu input CIR
+    %[h_mc, t_bins] = histcounts(t_chegada, 50, 'Normalization', 'pdf');
+
+    [h_mc, t_bins] = histcounts(t_chegada, 50, 'Normalization', 'pdf');
+    bar(t_bins(1:end-1), h_mc);
+    title('Resposta ao Impulso via Monte Carlo');
+
+end
