@@ -1,16 +1,30 @@
 clear all;
 clc;
-% Suprime os avisos de depreciação dos toolkits gráficos no CLI
-warning('off', 'Octave:graphics-toolkit-deprecated');
 
-% Força a não exibição de janelas
-set(0, 'defaultfigurevisible', 'off');
+isOctave = exist('OCTAVE_VERSION', 'builtin') ~= 0;
+if isOctave
+    disp('[Ambiente]: GNU Octave');
+    % Suprime os avisos de depreciação dos toolkits gráficos no CLI
+    warning('off', 'Octave:graphics-toolkit-deprecated');
 
-% Carrega o pacote de sistemas de controle
-pkg load control;
+    % Força a não exibição de janelas
+    set(0, 'defaultfigurevisible', 'off');
+
+    % Carrega o pacote de sistemas de controle
+    try pkg load control; catch; end; 
+else
+    disp('[Ambiente]: MATLAB');
+end
+
 
 %%PARAMETROS
-dados = [0.4; 0.05; 2.5; 10.0; 0.4; 0.5];% dados gerados pelo código "dadosmotor.p" com I=5 executado separadamente ("Dados Hardcoded")
+I = 5;
+if isOctave
+    disp('dados gerado manualmente para I=5');
+    dados = [0.4; 0.05; 2.5; 10.0; 0.4; 0.5];% dados gerados pelo código "dadosmotor.p" com I=5 executado separadamente ("Dados Hardcoded")
+else
+    [dados] = dadosmotor(I);
+end    
 Ts = 0.01; % período de amostragem
 C3 = [0 0 1]; % matriz de saída C3 para isolar x3 (a velocidade angular)
 C2 = [0 1 0]; % matriz de saída C2 para isolar x2 (posição angular)
