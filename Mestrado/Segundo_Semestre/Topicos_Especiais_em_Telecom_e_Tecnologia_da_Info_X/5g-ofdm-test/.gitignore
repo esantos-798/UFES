@@ -1,0 +1,14 @@
+# Material fora do escopo deste repositório
+/UNUSED Code/
+/Codigos 5G NR.zip
+/Melhor Condicao 2-75MHZ sem distorcao.PNG
+/src/experiments/VLCTestBed/Results2/
+
+# Artefatos e configurações binárias gerados por experimentos (não são código-fonte)
+*.fig
+*.mat
+*.bmp
+*.jpg
+*.pdf
+*.asv
+*.txt
