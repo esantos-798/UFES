@@ -121,7 +121,14 @@ jobs:
       - name: Suite de regressao do downlink
         working-directory: ${{ env.PROJ }}
         run: |
-          "$octave" -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
+          # O veredito vira annotation: e a unica linha deste passo que quem nao
+          # esta logado consegue ler, e assim o 'primeiro teste passando' fica
+          # visivel no proprio run (o PASS completo so sai no log, protegido).
+          if out="$("$octave" -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)" 2>&1)"; then st=0; else st=$?; fi
+          printf '%s\n' "$out"
+          verdict=$(if [ $st -eq 0 ]; then echo PASS; else echo FAIL; fi)
+          echo "::notice::suite $verdict (exit $st): $(printf '%s' "$out" | grep -E '^(PASS|FAIL|=)' | tr '\n\r' '  ' | tr -d '%' | cut -c1-600)"
+          exit $st
 
       - name: Valizacao DUC/DDC (skip fora do MATLAB)
         working-directory: ${{ env.PROJ }}
