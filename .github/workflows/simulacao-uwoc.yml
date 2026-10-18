@@ -1,16 +1,24 @@
 name: Simulacao 5G NR / UWOC
 
-# Octave headless com backend 'custom': roda sem 5G Toolbox, entao em runner gratuito.
-# Mesma suite que se roda localmente; ver ci/run_downlink_tests.m.
+# ATENCAO: o repo github.com/esantos-798/UFES tem raiz em C:\UFES e versiona
+# varios projetos de mestrado. O GitHub so reconhece workflows em .github/ na
+# RAIZ do repo -- daqui os 'paths' limitam o disparo ao projeto de telecom.
+# Octave headless com backend 'custom': roda sem 5G Toolbox em runner gratuito.
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'Mestrado/Segundo_Semestre/Topicos_Especiais_em_Telecom_e_Tecnologia_da_Info_X/**'
+      - '.github/workflows/simulacao-uwoc.yml'
   pull_request:
+    paths:
+      - 'Mestrado/Segundo_Semestre/Topicos_Especiais_em_Telecom_e_Tecnologia_da_Info_X/**'
+      - '.github/workflows/simulacao-uwoc.yml'
   workflow_dispatch:
     inputs:
       save_baseline:
-        description: 'Regenera ci/baseline.csv (use quando mudar a fisica de proposito)'
+        description: 'Regenera baseline.csv (use quando mudar a fisica de proposito)'
         type: boolean
         default: false
 
@@ -20,6 +28,9 @@ permissions:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  PROJ: Mestrado/Segundo_Semestre/Topicos_Especiais_em_Telecom_e_Tecnologia_da_Info_X
 
 jobs:
   regressao:
@@ -37,7 +48,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends octave liboctave-dev
-          # octave-signal ja vem como dependencia recomendada do .deb do octave em
+          # octave-signal ja vem como dependencia recomendada do .deb do octave no
           # Ubuntu 22.04/24.04; so instalamos explicitamente se estiver ausente.
           if dpkg -s octave-signal >/dev/null 2>&1; then
             echo "octave-signal presente via .deb -- nenhum 'pkg install' necessario"
@@ -46,16 +57,20 @@ jobs:
           fi
 
       - name: Diagnostico do ambiente
+        working-directory: ${{ env.PROJ }}
         run: octave -q --eval "addpath('ci'); ci_doctor();"
 
       - name: Suite de regressao do downlink
+        working-directory: ${{ env.PROJ }}
         run: octave -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
 
       - name: Valizacao DUC/DDC (skip fora do MATLAB)
+        working-directory: ${{ env.PROJ }}
         run: octave -q --eval "addpath('ci'); ok = validate_moddemod(); exit(~ok)"
 
       - name: Regenerar baseline se pedido
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.save_baseline }}
+        working-directory: ${{ env.PROJ }}
         env:
           UWOC_SAVE_BASELINE: '1'
         run: octave -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
@@ -66,13 +81,14 @@ jobs:
         with:
           name: metricas-downlink
           path: |
-            ci/baseline.csv
-            ci/results/
+            ${{ env.PROJ }}/ci/baseline.csv
+            ${{ env.PROJ }}/ci/results/
           if-no-files-found: ignore
           retention-days: 30
 
       - name: Tabela no resumo do run
         if: always()
+        working-directory: ${{ env.PROJ }}
         run: |
           {
             echo "## Downlink 5G NR / UWOC"
