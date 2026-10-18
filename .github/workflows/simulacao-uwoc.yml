@@ -41,35 +41,56 @@ jobs:
       # maquina produzem os mesmos numeros, entao um verde local vale no CI.
       # Imagem mantida pelo projeto GNU Octave (hub.docker.com/r/gnuoctave/octave),
       # nao e uma imagem oficial do Docker Hub -- vale revisar antes de confiar.
-      # Escolhida porque 'apt-get install octave' no runner falha no cixo de
-      # instalacao (exit 1/100) ao arrastar a stack TeX Live, sem mensagem util.
+      # Evitado 'apt-get install octave' no runner: arrasta a stack TeX Live e o
+      # install morria sem mensagem aproveitavel (exit 100, depois exit 1).
       image: gnuoctave/octave:11.3.0
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Localizar Octave e garantir o pacote signal
+      - name: Ambiente do container (diagnostico publico)
+        # Toda saida relevante vai tambem para GITHUB_STEP_SUMMARY: e a unica
+        # superficie deste job legivel sem autenticacao (log e artefato exigem login).
         run: |
-          set -euo pipefail
-          if   command -v octave     >/dev/null 2>&1; then OB="$(command -v octave)"
-          elif command -v octave-cli >/dev/null 2>&1; then OB="$(command -v octave-cli)"
-          else
-            echo "::error::nenhum binario octave/octave-cli dentro da imagem"
-            ls -l /usr/bin /usr/local/bin 2>/dev/null | grep -i octave || true
-            exit 1
-          fi
-          echo "octave=$OB" >> "$GITHUB_ENV"
-          "$OB" -q --eval "printf('Octave %s\n', version)"
+          SUM="$GITHUB_STEP_SUMMARY"
+          say() { echo "$1"; echo "$1" >> "$SUM"; }
+          fail() { echo >> "$SUM"; say "::error:: $1"; exit 1; }
 
-          # 'resample' (pacote signal) e dependencia real da suite. Se a imagem nao
-          # o trouxer, instalamos do Forge no prefixo do usuario atual.
-          if ! "$OB" -q --eval "pkg('load','signal'); exit(exist('resample')==0)"; then
-            echo "signal ausente -> pkg install -forge signal"
-            PKG_INSTALL_PREFIX="$("$OB" -q --eval "printf('%s', pkg('local_list'))")" \
-              "$OB" -q --eval "pkg('install','-forge','signal'); pkg('load','signal')"
+          echo '```' > "$SUM"
+          say "user=$(id -un) uid=$(id -u) home=$HOME"
+          grep '^PRETTY_NAME' /etc/os-release 2>/dev/null || true
+          echo "PATH=$PATH"
+
+          say "--- candidatos a binario octave ---"
+          command -v octave     || say "  octave: fora do PATH"
+          command -v octave-cli || say "  octave-cli: fora do PATH"
+          ls /usr/bin /usr/local/bin 2>/dev/null | grep -i octave || say "  nenhum arquivo *octave* nos dirs padrao"
+
+          OB="$(command -v octave 2>/dev/null || command -v octave-cli 2>/dev/null || true)"
+          [ -n "$OB" ] || fail "nenhum binario octave/octave-cli no container"
+          echo "octave=$OB" >> "$GITHUB_ENV"
+          say "binario escolhido: $OB"
+
+          "$OB" --version 2>&1 | head -3 || fail "--version falhou, imagem aparentemente quebrada"
+
+          say "--- ferramentas de build (pkg -forge exige gcc/gfortran/make) ---"
+          for t in gcc g++ gfortran make; do
+            say "  $t: $(command -v $t || echo AUSENTE)"
+          done
+
+          say "--- pacotes Octave na imagem ---"
+          "$OB" -q --eval "c=pkg('list'); for k=1:numel(c), printf('%s=%s ', c{k}.name, c{k}.version); end; puts('');" 2>&1 | head -5
+
+          say "--- resample: dependencia real da suite ---"
+          if "$OB" -q --eval "pkg('load','signal'); if exist('resample')==0, exit(1); end" 2>&1; then
+            say "  OK: signal carrega e resample existe"
+          else
+            say "  AUSENTE: signal nao fornece resample"
+            say '```' >> "$SUM"
+            fail "signal ausente no container gnuoctave/octave:11.3.0"
           fi
-          "$OB" -q --eval "pkg('load','signal'); assert(exist('resample')>0); disp('resample disponivel')"
+          echo '```' >> "$SUM"
 
       - name: Diagnostico do ambiente
         working-directory: ${{ env.PROJ }}
