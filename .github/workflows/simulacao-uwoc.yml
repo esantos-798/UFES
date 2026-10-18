@@ -36,53 +36,40 @@ jobs:
   regressao:
     name: Regressao numerica do downlink
     runs-on: ubuntu-latest
+    container:
+      # Mesma versao do Octave instalado localmente (11.3.0): o runner e a sua
+      # maquina produzem os mesmos numeros, entao um verde local vale no CI.
+      # Imagem mantida pelo projeto GNU Octave (hub.docker.com/r/gnuoctave/octave),
+      # nao e uma imagem oficial do Docker Hub -- vale revisar antes de confiar.
+      # Escolhida porque 'apt-get install octave' no runner falha no cixo de
+      # instalacao (exit 1/100) ao arrastar a stack TeX Live, sem mensagem util.
+      image: gnuoctave/octave:11.3.0
     timeout-minutes: 20
-
-    env:
-      DEBIAN_FRONTEND: noninteractive
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar Octave + pacote signal
+      - name: Localizar Octave e garantir o pacote signal
         run: |
           set -euo pipefail
-          sudo apt-get update
-
-          # 'octave' arrasta a stack TeX Live (via impressao/plotagem). O postinst do
-          # tex-common faz pergunta de configuracao e, sem resposta, o apt morre com
-          # exit 100 sem nenhuma mensagem util. Forcamos o dpkg a nunca perguntar.
-          printf 'DPkg::options { "--force-confdef"; "--force-confold"; };\n' \
-            | sudo tee /etc/apt/apt.conf.d/99force-conf >/dev/null
-
-          if ! sudo apt-get install -y --no-install-recommends octave; then
-            echo "::error::apt falhou ao instalar 'octave' (cenario de teste: sem 'octave' no image?)"
-            echo "Pacotes candidatos e dependencias de destaque:"
-            apt-cache policy octave octave-signal 2>&1 | head -30 || true
-            exit 1
-          fi
-
-          # octave-signal ja vem como dependencia recomendada do .deb do octave;
-          # como pedimos --no-install-recommends, garantimos o pacote explicitamente.
-          if dpkg -s octave-signal >/dev/null 2>&1; then
-            echo "octave-signal presente -- nenhum 'pkg install' necessario"
-          elif ! sudo apt-get install -y --no-install-recommends octave-signal; then
-            echo "::error::octave-signal nao disponivel via apt; serie do Ubuntu: $(lsb_release -rs)"
-            exit 1
-          fi
-
-          # Todo o pipeline usa o binario descoberto aqui (OCTAVE_BIN).
-          if command -v octave >/dev/null 2>&1; then
-            echo "octave=$(command -v octave)" >> "$GITHUB_ENV"
-          elif command -v octave-cli >/dev/null 2>&1; then
-            echo "octave=$(command -v octave-cli)" >> "$GITHUB_ENV"
+          if   command -v octave     >/dev/null 2>&1; then OB="$(command -v octave)"
+          elif command -v octave-cli >/dev/null 2>&1; then OB="$(command -v octave-cli)"
           else
-            echo "::error::apt saiu com sucesso mas nenhum binario 'octave'/'octave-cli' existe"
-            dpkg -L octave 2>&1 | grep -E 'bin/' | head -10 || true
+            echo "::error::nenhum binario octave/octave-cli dentro da imagem"
+            ls -l /usr/bin /usr/local/bin 2>/dev/null | grep -i octave || true
             exit 1
           fi
-          echo "OCTAVE_VERSION_STR=$("$octave" -q --eval 'printf("%s", version)')" >> "$GITHUB_ENV"
-          "$octave" --version | head -2
+          echo "octave=$OB" >> "$GITHUB_ENV"
+          "$OB" -q --eval "printf('Octave %s\n', version)"
+
+          # 'resample' (pacote signal) e dependencia real da suite. Se a imagem nao
+          # o trouxer, instalamos do Forge no prefixo do usuario atual.
+          if ! "$OB" -q --eval "pkg('load','signal'); exit(exist('resample')==0)"; then
+            echo "signal ausente -> pkg install -forge signal"
+            PKG_INSTALL_PREFIX="$("$OB" -q --eval "printf('%s', pkg('local_list'))")" \
+              "$OB" -q --eval "pkg('install','-forge','signal'); pkg('load','signal')"
+          fi
+          "$OB" -q --eval "pkg('load','signal'); assert(exist('resample')>0); disp('resample disponivel')"
 
       - name: Diagnostico do ambiente
         working-directory: ${{ env.PROJ }}
@@ -132,5 +119,5 @@ jobs:
             fi
             echo
             echo "---"
-            echo "_Octave ${OCTAVE_VERSION_STR:-?}_"
+            echo "_job na imagem gnuoctave/octave:11.3.0, mesma versao do Octave local_"
           } >> "$GITHUB_STEP_SUMMARY"
