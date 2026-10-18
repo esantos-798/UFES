@@ -58,51 +58,55 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Prepara o Octave do container (instala signal se faltar)
-        # Toda saida relevante vai tambem para GITHUB_STEP_SUMMARY e para uma
-        # ::notice::: sao as unicas superficies deste job legiveis sem login
-        # (log cru e artefato exigem autenticacao).
+        # Diagnostico por ::warning::/::error::: annotation e a UNICA superficie
+        # deste job legivel sem login (log cru, artefato e ate o step summary
+        # exigem autenticacao -- confirmado no run #5).
         # A imagem gnuoctave/octave compila o Octave do fonte com toolchain
         # completo, mas nao traz NENHUM pacote Forge. 'signal' e dependencia real
         # da suite (resample/filtfilt), entao ele e instalado aqui.
         working-directory: ${{ env.PROJ }}
         run: |
-          SUM="$GITHUB_STEP_SUMMARY"
-          say()  { echo "$1"; echo "$1" >> "$SUM"; }
-          fail() { echo >> "$SUM"; echo '```' >> "$SUM"; say "::error:: $1"; exit 1; }
-
           OB="$(command -v octave 2>/dev/null || command -v octave-cli 2>/dev/null || true)"
-          [ -n "$OB" ] || fail "nenhum binario octave/octave-cli no container"
+          if [ -z "$OB" ]; then
+            echo "::error::nenhum binario octave/octave-cli no container"
+            exit 1
+          fi
           echo "octave=$OB" >> "$GITHUB_ENV"
+
+          ann() { echo "::${1}::$(printf '%s' "$2" | tr '\n\r' '  ' | tr -d '%' | cut -c1-1000)"; }
 
           have_resample() {
             "$OB" -q --eval "addpath('ci'); load_signal_pkg(); if exist('resample') == 0, exit(1); end" >/dev/null 2>&1
           }
 
-          echo '```' > "$SUM"
-          say "binario: $OB"
-          say "$("$OB" --version 2>&1 | head -1)"
-          say "user=$(id -un) uid=$(id -u) home=$HOME $(grep -o 'Ubuntu [0-9.]*' /etc/os-release 2>/dev/null | head -1)"
+          # Roda o comando, mostra o log inteiro no passo e publica o rabicho como
+          # annotation (e o unico pedaco do log que alguem sem login consegue ler).
+          attempt() {
+            label="$1"; shift
+            out="$("$@" 2>&1)"; st=$?
+            printf '%s\n' "$out"
+            ann warning "$label exit=$st tail: $(printf '%s' "$out" | tail -22 | tr '\n\r' '  ')"
+            return $st
+          }
+
+          echo "== $("$OB" --version 2>&1 | head -1) | uid=$(id -u) home=$HOME =="
 
           if have_resample; then
-            say "signal ja vinha na imagem: nada a instalar"
+            echo "signal ja vinha na imagem: nada a instalar"
           else
-            say "signal ausente -> instalando signal-1.4.6 do SourceForge (compila no runner)"
-            say "pinnado em 1.4.6 porque resample.m e filtfilt.m desse release sao identicos"
-            say "ao 1.4.7 do Octave local, que gerou o baseline.csv (diff byte a byte conferido)"
-            for t in gcc g++ gfortran make mkoctfile curl; do
-              say "  $t: $(command -v $t || echo AUSENTE)"
-            done
-            say '```' >> "$SUM"
-            "$OB" -q --eval "pkg('install', 'https://downloads.sourceforge.net/octave/signal-1.4.6.tar.gz')" 2>&1 | tail -30
-            say '```' >> "$SUM"
-            have_resample || fail "instalacao de signal-1.4.6 nao produziu resample (ver o log deste passo)"
-            say "signal instalado"
+            ann warning "signal ausente; toolchain: $(for t in gcc gfortran make mkoctfile curl tar; do printf '%s=%s ' "$t" "$(command -v $t || echo AUSENTE)"; done)"
+            if attempt "pkg-forge" "$OB" -q --eval "pkg('install', '-forge', 'signal')" && have_resample; then
+              echo "signal instalado pelo Forge"
+            elif attempt "pkg-1.4.6" "$OB" -q --eval "pkg('install', 'https://downloads.sourceforge.net/octave/signal-1.4.6.tar.gz')" && have_resample; then
+              echo "signal instalado pelo tarball pinnado 1.4.6"
+            else
+              ann error "signal seguem ausente: as duas annotations pkg-forge/pkg-1.4.6 acima tem o erro real"
+              exit 1
+            fi
           fi
 
-          FP=$("$OB" -q --eval "addpath('ci'); load_signal_pkg(); v = octave_pkg_version('signal'); printf('Octave %s | signal %s | resample: %s', version(), strjoin(cellstr(num2str(v(:))), '.'), which('resample'))" 2>&1 | tail -1) || FP="Octave ok, fingerprint nao imprimiu"
-          say "$FP"
-          echo "::notice::$FP"
-          echo '```' >> "$SUM"
+          FP="$("$OB" -q --eval "addpath('ci'); load_signal_pkg(); v = octave_pkg_version('signal'); printf('Octave %s | signal %s | resample: %s', version(), strjoin(cellstr(num2str(v(:))), '.'), which('resample'))" 2>&1 | tail -1)"
+          ann notice "$FP"
 
       - name: Diagnostico do ambiente
         working-directory: ${{ env.PROJ }}
