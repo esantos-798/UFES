@@ -46,34 +46,66 @@ jobs:
 
       - name: Instalar Octave + pacote signal
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends octave liboctave-dev
-          # octave-signal ja vem como dependencia recomendada do .deb do octave no
-          # Ubuntu 22.04/24.04; so instalamos explicitamente se estiver ausente.
-          if dpkg -s octave-signal >/dev/null 2>&1; then
-            echo "octave-signal presente via .deb -- nenhum 'pkg install' necessario"
-          else
-            sudo apt-get install -y --no-install-recommends octave-signal
+
+          # 'octave' arrasta a stack TeX Live (via impressao/plotagem). O postinst do
+          # tex-common faz pergunta de configuracao e, sem resposta, o apt morre com
+          # exit 100 sem nenhuma mensagem util. Forcamos o dpkg a nunca perguntar.
+          printf 'DPkg::options { "--force-confdef"; "--force-confold"; };\n' \
+            | sudo tee /etc/apt/apt.conf.d/99force-conf >/dev/null
+
+          if ! sudo apt-get install -y --no-install-recommends octave; then
+            echo "::error::apt falhou ao instalar 'octave' (cenario de teste: sem 'octave' no image?)"
+            echo "Pacotes candidatos e dependencias de destaque:"
+            apt-cache policy octave octave-signal 2>&1 | head -30 || true
+            exit 1
           fi
+
+          # octave-signal ja vem como dependencia recomendada do .deb do octave;
+          # como pedimos --no-install-recommends, garantimos o pacote explicitamente.
+          if dpkg -s octave-signal >/dev/null 2>&1; then
+            echo "octave-signal presente -- nenhum 'pkg install' necessario"
+          elif ! sudo apt-get install -y --no-install-recommends octave-signal; then
+            echo "::error::octave-signal nao disponivel via apt; serie do Ubuntu: $(lsb_release -rs)"
+            exit 1
+          fi
+
+          # Todo o pipeline usa o binario descoberto aqui (OCTAVE_BIN).
+          if command -v octave >/dev/null 2>&1; then
+            echo "octave=$(command -v octave)" >> "$GITHUB_ENV"
+          elif command -v octave-cli >/dev/null 2>&1; then
+            echo "octave=$(command -v octave-cli)" >> "$GITHUB_ENV"
+          else
+            echo "::error::apt saiu com sucesso mas nenhum binario 'octave'/'octave-cli' existe"
+            dpkg -L octave 2>&1 | grep -E 'bin/' | head -10 || true
+            exit 1
+          fi
+          echo "OCTAVE_VERSION_STR=$("$octave" -q --eval 'printf("%s", version)')" >> "$GITHUB_ENV"
+          "$octave" --version | head -2
 
       - name: Diagnostico do ambiente
         working-directory: ${{ env.PROJ }}
-        run: octave -q --eval "addpath('ci'); ci_doctor();"
+        run: |
+          "$octave" -q --eval "addpath('ci'); ci_doctor();"
 
       - name: Suite de regressao do downlink
         working-directory: ${{ env.PROJ }}
-        run: octave -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
+        run: |
+          "$octave" -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
 
       - name: Valizacao DUC/DDC (skip fora do MATLAB)
         working-directory: ${{ env.PROJ }}
-        run: octave -q --eval "addpath('ci'); ok = validate_moddemod(); exit(~ok)"
+        run: |
+          "$octave" -q --eval "addpath('ci'); ok = validate_moddemod(); exit(~ok)"
 
       - name: Regenerar baseline se pedido
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.save_baseline }}
         working-directory: ${{ env.PROJ }}
         env:
           UWOC_SAVE_BASELINE: '1'
-        run: octave -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
+        run: |
+          "$octave" -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
 
       - name: Publicar baseline e metricas
         if: always()
@@ -100,5 +132,5 @@ jobs:
             fi
             echo
             echo "---"
-            echo "_Octave $(octave -q --eval 'printf("%s", version)')_"
+            echo "_Octave ${OCTAVE_VERSION_STR:-?}_"
           } >> "$GITHUB_STEP_SUMMARY"
