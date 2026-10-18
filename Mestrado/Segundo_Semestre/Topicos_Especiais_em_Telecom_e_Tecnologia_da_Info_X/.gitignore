@@ -1,1 +1,7 @@
 *.mov
+
+# Saido da suite de CI: gerado a cada run, a baseline versionada e ci/baseline.csv
+ci/results/
+
+# Autosaves do MATLAB/Octave
+*.asv

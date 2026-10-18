@@ -1,0 +1,88 @@
+name: Simulacao 5G NR / UWOC
+
+# Octave headless com backend 'custom': roda sem 5G Toolbox, entao em runner gratuito.
+# Mesma suite que se roda localmente; ver ci/run_downlink_tests.m.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      save_baseline:
+        description: 'Regenera ci/baseline.csv (use quando mudar a fisica de proposito)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regressao:
+    name: Regressao numerica do downlink
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Octave + pacote signal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends octave liboctave-dev
+          # octave-signal ja vem como dependencia recomendada do .deb do octave em
+          # Ubuntu 22.04/24.04; so instalamos explicitamente se estiver ausente.
+          if dpkg -s octave-signal >/dev/null 2>&1; then
+            echo "octave-signal presente via .deb -- nenhum 'pkg install' necessario"
+          else
+            sudo apt-get install -y --no-install-recommends octave-signal
+          fi
+
+      - name: Diagnostico do ambiente
+        run: octave -q --eval "addpath('ci'); ci_doctor();"
+
+      - name: Suite de regressao do downlink
+        run: octave -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
+
+      - name: Valizacao DUC/DDC (skip fora do MATLAB)
+        run: octave -q --eval "addpath('ci'); ok = validate_moddemod(); exit(~ok)"
+
+      - name: Regenerar baseline se pedido
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.save_baseline }}
+        env:
+          UWOC_SAVE_BASELINE: '1'
+        run: octave -q --eval "addpath('ci'); ok = run_downlink_tests(); exit(~ok)"
+
+      - name: Publicar baseline e metricas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metricas-downlink
+          path: |
+            ci/baseline.csv
+            ci/results/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Tabela no resumo do run
+        if: always()
+        run: |
+          {
+            echo "## Downlink 5G NR / UWOC"
+            echo
+            if [ -f ci/results/summary.md ]; then
+              cat ci/results/summary.md
+            else
+              echo "_suite nao escreveu resumo (falhou antes da comparacao)_"
+            fi
+            echo
+            echo "---"
+            echo "_Octave $(octave -q --eval 'printf("%s", version)')_"
+          } >> "$GITHUB_STEP_SUMMARY"
