@@ -36,6 +36,14 @@ jobs:
   regressao:
     name: Regressao numerica do downlink
     runs-on: ubuntu-latest
+    env:
+      # O container roda como root e o workspace pertence ao usuario 'runner' do
+      # host; sem isto o git do passo 'Post Run actions/checkout' morre com exit 128
+      # (detected dubious ownership). Config por variavel de ambiente vale para os
+      # proprios actions, sem tocar em arquivo de config nenhum.
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: ${{ github.workspace }}
     container:
       # Mesma versao do Octave instalado localmente (11.3.0): o runner e a sua
       # maquina produzem os mesmos numeros, entao um verde local vale no CI.
@@ -49,47 +57,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ambiente do container (diagnostico publico)
-        # Toda saida relevante vai tambem para GITHUB_STEP_SUMMARY: e a unica
-        # superficie deste job legivel sem autenticacao (log e artefato exigem login).
+      - name: Prepara o Octave do container (instala signal se faltar)
+        # Toda saida relevante vai tambem para GITHUB_STEP_SUMMARY e para uma
+        # ::notice::: sao as unicas superficies deste job legiveis sem login
+        # (log cru e artefato exigem autenticacao).
+        # A imagem gnuoctave/octave compila o Octave do fonte com toolchain
+        # completo, mas nao traz NENHUM pacote Forge. 'signal' e dependencia real
+        # da suite (resample/filtfilt), entao ele e instalado aqui.
+        working-directory: ${{ env.PROJ }}
         run: |
           SUM="$GITHUB_STEP_SUMMARY"
-          say() { echo "$1"; echo "$1" >> "$SUM"; }
-          fail() { echo >> "$SUM"; say "::error:: $1"; exit 1; }
-
-          echo '```' > "$SUM"
-          say "user=$(id -un) uid=$(id -u) home=$HOME"
-          grep '^PRETTY_NAME' /etc/os-release 2>/dev/null || true
-          echo "PATH=$PATH"
-
-          say "--- candidatos a binario octave ---"
-          command -v octave     || say "  octave: fora do PATH"
-          command -v octave-cli || say "  octave-cli: fora do PATH"
-          ls /usr/bin /usr/local/bin 2>/dev/null | grep -i octave || say "  nenhum arquivo *octave* nos dirs padrao"
+          say()  { echo "$1"; echo "$1" >> "$SUM"; }
+          fail() { echo >> "$SUM"; echo '```' >> "$SUM"; say "::error:: $1"; exit 1; }
 
           OB="$(command -v octave 2>/dev/null || command -v octave-cli 2>/dev/null || true)"
           [ -n "$OB" ] || fail "nenhum binario octave/octave-cli no container"
           echo "octave=$OB" >> "$GITHUB_ENV"
-          say "binario escolhido: $OB"
 
-          "$OB" --version 2>&1 | head -3 || fail "--version falhou, imagem aparentemente quebrada"
+          have_resample() {
+            "$OB" -q --eval "addpath('ci'); load_signal_pkg(); if exist('resample') == 0, exit(1); end" >/dev/null 2>&1
+          }
 
-          say "--- ferramentas de build (pkg -forge exige gcc/gfortran/make) ---"
-          for t in gcc g++ gfortran make; do
-            say "  $t: $(command -v $t || echo AUSENTE)"
-          done
+          echo '```' > "$SUM"
+          say "binario: $OB"
+          say "$("$OB" --version 2>&1 | head -1)"
+          say "user=$(id -un) uid=$(id -u) home=$HOME $(grep -o 'Ubuntu [0-9.]*' /etc/os-release 2>/dev/null | head -1)"
 
-          say "--- pacotes Octave na imagem ---"
-          "$OB" -q --eval "c=pkg('list'); for k=1:numel(c), printf('%s=%s ', c{k}.name, c{k}.version); end; puts('');" 2>&1 | head -5
-
-          say "--- resample: dependencia real da suite ---"
-          if "$OB" -q --eval "pkg('load','signal'); if exist('resample')==0, exit(1); end" 2>&1; then
-            say "  OK: signal carrega e resample existe"
+          if have_resample; then
+            say "signal ja vinha na imagem: nada a instalar"
           else
-            say "  AUSENTE: signal nao fornece resample"
+            say "signal ausente -> instalando signal-1.4.6 do SourceForge (compila no runner)"
+            say "pinnado em 1.4.6 porque resample.m e filtfilt.m desse release sao identicos"
+            say "ao 1.4.7 do Octave local, que gerou o baseline.csv (diff byte a byte conferido)"
+            for t in gcc g++ gfortran make mkoctfile curl; do
+              say "  $t: $(command -v $t || echo AUSENTE)"
+            done
             say '```' >> "$SUM"
-            fail "signal ausente no container gnuoctave/octave:11.3.0"
+            "$OB" -q --eval "pkg('install', 'https://downloads.sourceforge.net/octave/signal-1.4.6.tar.gz')" 2>&1 | tail -30
+            say '```' >> "$SUM"
+            have_resample || fail "instalacao de signal-1.4.6 nao produziu resample (ver o log deste passo)"
+            say "signal instalado"
           fi
+
+          FP=$("$OB" -q --eval "addpath('ci'); load_signal_pkg(); v = octave_pkg_version('signal'); printf('Octave %s | signal %s | resample: %s', version(), strjoin(cellstr(num2str(v(:))), '.'), which('resample'))" 2>&1 | tail -1) || FP="Octave ok, fingerprint nao imprimiu"
+          say "$FP"
+          echo "::notice::$FP"
           echo '```' >> "$SUM"
 
       - name: Diagnostico do ambiente

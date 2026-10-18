@@ -32,7 +32,11 @@ function R = run_downlink(cfg)
 
     isOctave = exist('OCTAVE_VERSION', 'builtin') ~= 0;
     if isOctave
-        try, pkg load signal communications; catch, end
+        % um try por pacote: 'pkg load signal communications' jointe falha os dois
+        % quando so um existe (no CI o signal vem sem communications, e nada daqui
+        % usa communications -- biterr/modulate ja tem caminho custom).
+        try, pkg load signal; catch, end
+        try, pkg load communications; catch, end
     end
     addLabPaths();
 
