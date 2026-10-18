@@ -95,9 +95,14 @@ jobs:
             echo "signal ja vinha na imagem: nada a instalar"
           else
             ann warning "signal ausente; toolchain: $(for t in gcc gfortran make mkoctfile curl tar; do printf '%s=%s ' "$t" "$(command -v $t || echo AUSENTE)"; done)"
-            if attempt "pkg-forge" "$OB" -q --eval "pkg('install', '-forge', 'signal')" && have_resample; then
+            # O signal do Forge declara 'Depends: control >= 2.4' e o pkg recusa a
+            # instalacao ANTES de compilar qualquer coisa (erro visto no run #6).
+            # -nodeps e intencional: a suite so usa resample/filtfilt/kaiser (.m) e
+            # upfirdn (.cc), nenhum toca no control. Localmente o control esta
+            # instalado mas NAO carregado, entao o namespace do CI fica igual.
+            if attempt "pkg-forge" "$OB" -q --eval "pkg('install', '-nodeps', '-forge', 'signal')" && have_resample; then
               echo "signal instalado pelo Forge"
-            elif attempt "pkg-1.4.6" "$OB" -q --eval "pkg('install', 'https://downloads.sourceforge.net/octave/signal-1.4.6.tar.gz')" && have_resample; then
+            elif attempt "pkg-1.4.6" "$OB" -q --eval "pkg('install', '-nodeps', 'https://downloads.sourceforge.net/octave/signal-1.4.6.tar.gz')" && have_resample; then
               echo "signal instalado pelo tarball pinnado 1.4.6"
             else
               ann error "signal seguem ausente: as duas annotations pkg-forge/pkg-1.4.6 acima tem o erro real"
